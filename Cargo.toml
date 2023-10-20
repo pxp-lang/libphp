@@ -1,10 +1,6 @@
 [package]
-name = "php-sys"
-description = "Rust bindings to PHP's C API."
+name = "libphp"
+description = "Rust bindings to PHP's C API (via libphp)."
 keywords = ["php", "binding", "bindings", "c", "sys"]
 version = "0.1.0"
 edition = "2021"
-
-[build-dependencies]
-bindgen = "0.68.1"
-cc = "1.0.83"

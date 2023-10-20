@@ -1,1 +1,0 @@
-include!(concat!(env!("OUT_DIR"), "/php_sys_bindings.rs"));

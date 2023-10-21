@@ -9,6 +9,6 @@
 
 uint8_t libphp_zval_get_type(const zval*);
 
-const char* libphp_zval_get_string(const zval*);
+const char* libphp_zval_get_string(zval*);
 
 const char* libphp_var_export(zval *pz);

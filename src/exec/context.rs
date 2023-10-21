@@ -1,6 +1,6 @@
-use std::{ptr::null_mut, ffi::CString, mem::MaybeUninit};
+use std::{ptr::null_mut, ffi::CString};
 
-use crate::{sys::{php_embed_init, php_embed_shutdown, zval, zend_eval_string_ex}, value::Value};
+use crate::{sys::{php_embed_init, php_embed_shutdown, zval, zend_eval_string_ex, zend_file_handle, zend_stream_init_filename, php_execute_simple_script}, value::Value};
 
 pub struct Context {
     initd: bool,
@@ -23,6 +23,23 @@ impl Context {
 
     pub fn argv(&mut self, argv: Vec<String>) {
         self.argv = argv;
+    }
+
+    pub fn execute_file(&mut self, file: &str) -> Value {
+        let mut file_handle = zend_file_handle::default();
+        let cstring = CString::new(file).unwrap();
+
+        self.init();
+
+        unsafe {
+            zend_stream_init_filename(&mut file_handle, cstring.as_ptr());
+
+            let mut retval_ptr = zval::default();
+
+            php_execute_simple_script(&mut file_handle, &mut retval_ptr);
+
+            Value::new(&retval_ptr)
+        }
     }
 
     pub fn result_of(&mut self, expression: &str) -> Value {

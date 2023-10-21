@@ -4,7 +4,7 @@ uint8_t libphp_zval_get_type(const zval* pz) {
     return zval_get_type(pz);
 }
 
-const char *libphp_zval_get_string(const zval *pz)
+const char *libphp_zval_get_string(zval *pz)
 {
     convert_to_string(pz);
     return Z_STRVAL_P(pz);

@@ -94,6 +94,9 @@ fn main() {
         .allowlist_function("zend_compile_string")
         .allowlist_function("zend_get_type")
         .allowlist_function("zval_ptr_dtor")
+        .allowlist_function("zend_stream_init_filename")
+        .allowlist_function("php_execute_script")
+        .allowlist_function("php_execute_simple_script")
         .header("src/wrapper.h")
         .generate()
         .expect("Unable to generate bindings");

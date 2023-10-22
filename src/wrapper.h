@@ -6,9 +6,14 @@
 #include <Zend/zend_types.h>
 #include <ext/standard/php_var.h>
 #include "zend_smart_str.h"
+#include "main/php_variables.h"
 
 uint8_t libphp_zval_get_type(const zval*);
 
 const char* libphp_zval_get_string(zval*);
 
 const char* libphp_var_export(zval *pz);
+
+void libphp_zval_create_string(zval *pz, const char *str);
+
+void libphp_register_variable(const char *key, zval *value);

@@ -1,6 +1,14 @@
-use std::{ffi::CStr, fmt::{Display, Debug}};
+use std::{
+    ffi::CStr,
+    fmt::{Debug, Display},
+};
 
-use crate::sys::{zval, IS_LONG, libphp_zval_get_type, IS_DOUBLE, IS_NULL, IS_STRING, libphp_zval_get_string, IS_FALSE, IS_TRUE, zval_ptr_dtor, libphp_var_export};
+use crate::sys::{
+    libphp_var_export, libphp_zval_get_string, libphp_zval_get_type, zval, zval_ptr_dtor,
+    IS_DOUBLE, IS_FALSE, IS_LONG, IS_NULL, IS_STRING, IS_TRUE,
+};
+
+mod string;
 
 #[derive(Clone)]
 pub struct Value {
@@ -9,7 +17,9 @@ pub struct Value {
 
 impl Value {
     pub fn new(zval: &zval) -> Self {
-        Self { ptr: Box::new(*zval) }
+        Self {
+            ptr: Box::new(*zval),
+        }
     }
 
     pub fn get_type(&self) -> u8 {
@@ -44,6 +54,14 @@ impl Value {
         self.is_true() || self.is_false()
     }
 
+    pub fn as_ptr(&self) -> *const zval {
+        self.ptr.as_ref()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut zval {
+        self.ptr.as_mut()
+    }
+
     pub fn as_str(&self) -> &str {
         unsafe {
             let cstr = CStr::from_ptr(libphp_zval_get_string(self.ptr.as_ref()));
@@ -59,9 +77,7 @@ impl Value {
     }
 
     pub fn as_cstr(&self) -> &CStr {
-        unsafe {
-            CStr::from_ptr(libphp_zval_get_string(self.ptr.as_ref()))
-        }
+        unsafe { CStr::from_ptr(libphp_zval_get_string(self.ptr.as_ref())) }
     }
 
     pub fn to_int(&self) -> i64 {
@@ -72,13 +88,7 @@ impl Value {
         unsafe { self.ptr.value.dval }
     }
 
-    pub fn to_string(&self) -> String {
-        self.as_str().to_string()
-    }
-
-    pub fn to_null(&self) -> () {
-        ()
-    }
+    pub fn to_null(&self) {}
 
     pub fn get_type_name(&self) -> &'static str {
         match self.get_type() {
@@ -101,7 +111,9 @@ impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let var_exported = unsafe { libphp_var_export(self.ptr.as_ref()) };
 
-        write!(f, "{}", unsafe { CStr::from_ptr(var_exported).to_string_lossy() })
+        write!(f, "{}", unsafe {
+            CStr::from_ptr(var_exported).to_string_lossy()
+        })
     }
 }
 

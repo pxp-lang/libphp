@@ -21,3 +21,13 @@ const char* libphp_var_export(zval *pz)
 
     return exported;
 }
+
+void libphp_zval_create_string(zval *pz, const char *str)
+{
+    ZVAL_STRING_FAST(pz, str);
+}
+
+void libphp_register_variable(const char *key, zval *value)
+{
+    zend_hash_str_update(&EG(symbol_table), key, strlen(key), value);
+}

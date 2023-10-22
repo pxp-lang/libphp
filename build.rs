@@ -4,88 +4,34 @@ use std::{env, fs, path::{Path, PathBuf}, process::Command};
 
 use bindgen::Builder;
 
-const PHP_VERSION_BRANCH: &'static str = "PHP-8.2.11";
+const PHP_VERSION: &'static str = "8.2";
 
 fn main() {
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rerun-if-changed=src/wrapper.c");
+    println!("cargo:rerun-if-env-change=PHP_VERSION");
 
-    let cpus = num_cpus::get();
-
-    #[cfg(all(target_os = "linux"))]
-    let default_link_static = false;
-    #[cfg(all(target_os = "macos"))]
-    let default_link_static = true;
-
-    let php_version_branch = option_env!("PHP_VERSION_BRANCH").unwrap_or(PHP_VERSION_BRANCH);
-
-    fs::create_dir_all(target_dir("")).expect("Failed to create target directory.");
-
-    println!("cargo:rerun-if-env-change=PHP_VERSION_BRANCH");
-
-    if ! target_exists("php-src/LICENSE") {
-        println!("Setting up PHP (branch: {})", php_version_branch);
-
-        run_command_or_fail(
-            target_dir(""),
-            "git",
-            &[
-                "clone",
-                "https://github.com/php/php-src",
-                format!("--branch={}", php_version_branch).as_str(),
-                "--depth=1",
-            ],
-        );
-
-        run_command_or_fail(target_dir("php-src"), "./scripts/dev/genfiles", &[]);
-        run_command_or_fail(target_dir("php-src"), "./buildconf", &["--force"]);
-
-        #[cfg(all(target_os = "linux"))]
-        let config = &[
-            "--enable-debug",
-            "--enable-embed=shared",
-            "--disable-cli",
-            "--disable-cgi",
-            "--enable-zts",
-            // "--without-iconv",
-            //"--disable-libxml",
-            //"--disable-dom",
-            //"--disable-xml",
-            //"--disable-simplexml",
-            //"--disable-xmlwriter",
-            //"--disable-xmlreader",
-            // "--without-pear",
-            // "--with-libdir=lib64",
-            // "--with-pic",
-        ];
-        #[cfg(all(target_os = "macos"))]
-        let config = &[
-            "--enable-debug",
-            "--enable-embed=static",
-            "--disable-cli",
-            "--disable-cgi",
-            "--enable-zts",
-            "--disable-all",
-        ];
-
-        run_command_or_fail(target_dir("php-src"), "./configure", config);
-        run_command_or_fail(target_dir("php-src"), "make", &["-j", cpus.to_string().as_str()]);
+    if ! target_exists("spc") {
+        run_command_or_fail(target_dir(""), "git", &["clone", "https://github.com/crazywhalecc/static-php-cli.git", "spc", "--depth=1"]);
+        run_command_or_fail(target_dir("spc"), "composer", &["update", "--no-dev", "-n", "--no-plugins"]);
+        run_command_or_fail(target_dir("spc"), "php", &["bin/spc", "download", "php-src,pkg-config,micro", format!("--with-php={}", PHP_VERSION).as_str()]);
+        run_command_or_fail(target_dir("spc"), "php", &["bin/spc", "doctor", "--auto-fix"]);
+        run_command_or_fail(target_dir("spc"), "php", &["bin/spc", "build", "opcache", "--build-embed", "--enable-zts"]);
     }
 
-    let include_dir = target_dir("php-src");
-    let lib_dir = target_dir("php-src/libs");
-    let link_type = "=static";
+    let include_dir = target_dir("spc/buildroot/include/php");
+    let lib_dir = target_dir("spc/buildroot/lib");
 
-    println!("cargo:rustc-link-lib{}=php", link_type);
+    println!("cargo:rustc-link-lib=static=php");
     println!("cargo:rustc-link-search=native={}", lib_dir);
 
-    let includes = ["/", "/TSRM", "/Zend", "/main"]
+    let includes = ["/", "Zend", "/main", "/TSRM"]
         .iter()
-        .map(|d| format!("-I{}{}", include_dir, d))
+        .map(|folder| format!("-I{}/{}", &include_dir, &folder))
         .collect::<Vec<String>>();
 
     let bindings = Builder::default()
-        .clang_args(includes)
+        .clang_args(&includes)
         .derive_default(true)
         .allowlist_type("zval")
         .allowlist_function("zend_eval_string_ex")
@@ -109,12 +55,11 @@ fn main() {
 
     cc::Build::new()
         .file("src/wrapper.c")
-        .include(&include_dir)
+        .includes(
+            &includes.iter().map(|s| s.as_str()[2..].to_string()).collect::<Vec<String>>()
+        )
         .flag("-fPIC")
         .flag("-m64")
-        .include(&format!("{}/TSRM", include_dir))
-        .include(&format!("{}/Zend", include_dir))
-        .include(&format!("{}/main", include_dir))
         .static_flag(true)
         .compile("wrapper");
 }
@@ -129,17 +74,17 @@ fn target_exists(path: &str) -> bool {
 }
 
 fn run_command_or_fail(dir: String, cmd: &str, args: &[&str]) {
+    let fmt_cmd = format!("{} {}", cmd, args.join(" "));
     println!(
-        "Running command: \"{} {}\" in dir: {}",
-        cmd,
-        args.join(" "),
+        "Running command: \"{}\" in dir: {}",
+        &fmt_cmd,
         dir
     );
     let ret = Command::new(cmd).current_dir(dir).args(args).status();
     match ret.map(|status| (status.success(), status.code())) {
         Ok((true, _)) => return,
-        Ok((false, Some(c))) => panic!("Command failed with error code {}", c),
-        Ok((false, None)) => panic!("Command got killed"),
-        Err(e) => panic!("Command failed with error: {}", e),
+        Ok((false, Some(c))) => panic!("Command failed with error code {} [cmd] {}", c, &fmt_cmd),
+        Ok((false, None)) => panic!("Command got killed [cmd] {}", &fmt_cmd),
+        Err(e) => panic!("Command failed with error: {} [cmd] {}", e, &fmt_cmd),
     }
 }

@@ -17,6 +17,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Create a new PHP execution context.
     pub fn new() -> Self {
         Self {
             initd: false,
@@ -26,6 +27,10 @@ impl Context {
         }
     }
 
+    /// Bind a variable to the PHP context.
+    /// The variable will be available in the PHP context as a global variable.
+    ///
+    /// WARNING: Variables will be dropped after each execution to avoid memory leaks.
     pub fn bind(&mut self, name: &str, value: impl Into<Value>) {
         self.init();
 
@@ -39,14 +44,17 @@ impl Context {
         self.bindings.push(value);
     }
 
+    /// Specify the number of arguments to pass to the PHP context.
     pub fn argc(&mut self, argc: i32) {
         self.argc = argc;
     }
 
+    /// Specify the arguments to pass to the PHP context.
     pub fn argv(&mut self, argv: Vec<String>) {
         self.argv = argv;
     }
 
+    /// Execute a PHP file.
     pub fn execute_file(&mut self, file: &str) -> Value {
         let mut file_handle = zend_file_handle::default();
         let cstring = CString::new(file).unwrap();
@@ -68,6 +76,7 @@ impl Context {
         Value::new(&retval_ptr)
     }
 
+    /// Evaluate a PHP expression and get the result.
     pub fn result_of(&mut self, expression: &str) -> Value {
         let code_cstring =
             CString::new(expression).expect("Failed to convert the given code to a C string.");
@@ -92,6 +101,9 @@ impl Context {
         Value::new(&retval_ptr)
     }
 
+    /// Initialise the execution context.
+    ///
+    /// NOTE: This method does not need to be called manually.
     pub fn init(&mut self) {
         if self.initd {
             return;
@@ -115,6 +127,9 @@ impl Context {
         self.initd = true;
     }
 
+    /// Close the execution context.
+    ///
+    /// NOTE: This method does not need to be called manually. The execution context is automatically closed when Context is dropped.
     pub fn close(&self) {
         if self.initd {
             unsafe { php_embed_shutdown() };

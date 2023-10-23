@@ -12,6 +12,7 @@ use self::array::Array;
 
 pub mod array;
 mod string;
+mod int;
 
 #[derive(Clone)]
 pub struct Value {

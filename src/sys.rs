@@ -24,7 +24,12 @@ extern "C" {
     pub fn libphp_var_export(zval: *const zval) -> *const c_char;
 
     pub fn libphp_zval_create_string(zval: *mut zval, string: *const c_char) -> *const c_void;
+    pub fn libphp_zval_create_long(zval: *mut zval, long: i64) -> *const c_void;
+
+    pub fn libphp_zend_string_init(str: *const c_char) -> *mut zend_string;
+
     pub fn libphp_register_variable(key: *const c_char, value: *mut zval) -> *const c_void;
+    pub fn libphp_register_constant(name: *const c_char, value: *mut zval) -> *const c_void;
 }
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

@@ -1,16 +1,20 @@
-use std::{ffi::CString, ptr::null_mut};
+use std::{ffi::CString, ptr::{null_mut, null}};
 
 use crate::{
     sys::{
         libphp_register_variable, php_embed_init, php_embed_shutdown, php_execute_simple_script,
-        zend_eval_string_ex, zend_file_handle, zend_stream_init_filename, zval,
+        zend_eval_string_ex, zend_file_handle, zend_stream_init_filename, zval, libphp_register_constant, zend_fcall_info, zend_call_function, libphp_zval_create_string, zend_fcall_info_cache, zend_function_entry, zend_execute_data, zend_register_functions, zend_arg_info, zend_internal_arg_info, zend_type,
     },
     value::Value,
 };
 
+pub type OnInitCallback = fn(&mut Context);
+pub type FunctionImplementation = unsafe extern "C" fn(*mut zend_execute_data, *mut zval);
+
 #[derive(Default)]
 pub struct Context {
     initd: bool,
+    on_init: Option<OnInitCallback>,
     argc: i32,
     argv: Vec<String>,
     bindings: Vec<Value>,
@@ -21,6 +25,7 @@ impl Context {
     pub fn new() -> Self {
         Self {
             initd: false,
+            on_init: None,
             argc: 0,
             argv: Vec::new(),
             bindings: Vec::new(),
@@ -29,11 +34,7 @@ impl Context {
 
     /// Bind a variable to the PHP context.
     /// The variable will be available in the PHP context as a global variable.
-    ///
-    /// WARNING: Variables will be dropped after each execution to avoid memory leaks.
     pub fn bind(&mut self, name: &str, value: impl Into<Value>) {
-        self.init();
-
         let mut value = value.into();
         let var_name_cstr = CString::new(name).unwrap();
 
@@ -42,6 +43,47 @@ impl Context {
         }
 
         self.bindings.push(value);
+    }
+
+    /// Define a constant in the PHP context.
+    /// The constant will be available in the PHP context as a global constant.
+    pub fn define(&mut self, name: &str, value: impl Into<Value>) {
+        let mut value = value.into();
+        let constant_name_cstr = CString::new(name).unwrap();
+
+        unsafe {
+            libphp_register_constant(constant_name_cstr.as_ptr(), value.as_mut_ptr());
+        }
+
+        self.bindings.push(value);
+    }
+
+    /// Define a new function in the PHP context.
+    pub fn define_function(&mut self, name: &str, function: FunctionImplementation) {
+        let mut function_entry = zend_function_entry::default();   
+        let function_name_cstr = CString::new(name).unwrap();
+
+        let mut args: Vec<zend_internal_arg_info> = Vec::new();
+
+        let mut arg = zend_internal_arg_info::default();
+        arg.name = null();
+
+        let arg_type = zend_type::default();
+        arg.type_ = arg_type;
+
+        args.push(arg);
+
+        function_entry.fname = function_name_cstr.as_ptr();
+        function_entry.num_args = 0;
+        function_entry.handler = Some(function);
+        function_entry.arg_info = Box::into_raw(args.into_boxed_slice()) as *const zend_internal_arg_info;
+        
+        let mut functions = Vec::new();
+        functions.push(function_entry);
+        
+        unsafe {
+            zend_register_functions(null_mut(), functions.as_mut_ptr(), null_mut(), 0);
+        }
     }
 
     /// Specify the number of arguments to pass to the PHP context.
@@ -101,6 +143,63 @@ impl Context {
         Value::new(&retval_ptr)
     }
 
+    /// Call a PHP function with no arguments.
+    pub fn call(&mut self, name: &str) -> Value {
+        let name_cstring = CString::new(name).unwrap();
+
+        self.init();
+
+        let mut retval_ptr = zval::default();
+        
+        let mut fcall = zend_fcall_info::default();
+        let mut fcall_cache = zend_fcall_info_cache::default();
+
+        unsafe { libphp_zval_create_string(&mut fcall.function_name, name_cstring.as_ptr()); }
+
+        fcall.param_count = 0;
+        fcall.object = null_mut();
+        fcall.size = std::mem::size_of::<zend_fcall_info>();
+        fcall.retval = &mut retval_ptr;
+
+        unsafe {
+            zend_call_function(&mut fcall, &mut fcall_cache);
+        }
+
+        return Value::new(&retval_ptr);
+    }
+
+    /// Call a PHP function with no arguments.
+    pub fn call_with(&mut self, name: &str, args: &[impl Into<Value> + Clone]) -> Value {
+        let name_cstring = CString::new(name).unwrap();
+
+        self.init();
+
+        // Convert the given arguments into a list of values.
+        let mut args = args.iter().map(|arg| arg.clone().into()).collect::<Vec<Value>>();
+        let mut retval_ptr = zval::default();
+        let mut fcall = zend_fcall_info::default();
+        let mut fcall_cache = zend_fcall_info_cache::default();
+
+        unsafe { libphp_zval_create_string(&mut fcall.function_name, name_cstring.as_ptr()); }
+
+        fcall.param_count = args.len() as u32;
+        fcall.params = args.first_mut().unwrap().as_mut_ptr();
+        fcall.object = null_mut();
+        fcall.size = std::mem::size_of::<zend_fcall_info>();
+        fcall.retval = &mut retval_ptr;
+
+        unsafe {
+            zend_call_function(&mut fcall, &mut fcall_cache);
+        }
+
+        return Value::new(&retval_ptr);
+    }
+
+    /// Register a callback to be called when the execution context is initialised.
+    pub fn on_init(&mut self, callback: OnInitCallback) {
+        self.on_init = Some(callback);
+    }
+
     /// Initialise the execution context.
     ///
     /// NOTE: This method does not need to be called manually.
@@ -122,6 +221,10 @@ impl Context {
                         .as_mut_ptr()
                 },
             );
+        }
+
+        if let Some(callback) = self.on_init {
+            callback(self);
         }
 
         self.initd = true;

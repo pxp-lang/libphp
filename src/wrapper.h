@@ -15,5 +15,10 @@ const char* libphp_zval_get_string(zval*);
 const char* libphp_var_export(zval *pz);
 
 void libphp_zval_create_string(zval *pz, const char *str);
+void libphp_zval_create_long(zval *pz, long l);
+
+zend_string* libphp_zend_string_init();
 
 void libphp_register_variable(const char *key, zval *value);
+
+void libphp_register_constant(const char *name, zval *value);

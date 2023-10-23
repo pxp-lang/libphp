@@ -4,10 +4,13 @@ use std::{
 };
 
 use crate::sys::{
-    libphp_var_export, libphp_zval_get_string, libphp_zval_get_type, zval, zval_ptr_dtor,
+    libphp_var_export, libphp_zval_get_string, libphp_zval_get_type, zval, zval_ptr_dtor, IS_ARRAY,
     IS_DOUBLE, IS_FALSE, IS_LONG, IS_NULL, IS_STRING, IS_TRUE,
 };
 
+use self::array::Array;
+
+pub mod array;
 mod string;
 
 #[derive(Clone)]
@@ -63,6 +66,11 @@ impl Value {
         self.is_true() || self.is_false()
     }
 
+    /// Check if the value is an array.
+    pub fn is_array(&self) -> bool {
+        self.get_type() == IS_ARRAY
+    }
+
     /// Check a raw pointer to the underlying zval.
     pub fn as_ptr(&self) -> *const zval {
         self.ptr.as_ref()
@@ -106,6 +114,11 @@ impl Value {
     /// Convert the value to a 64-bit floating point number.
     pub fn to_float(&self) -> f64 {
         unsafe { self.ptr.value.dval }
+    }
+
+    /// Convert the value to an Array.
+    pub fn to_array(&self) -> Array {
+        unsafe { self.ptr.value.arr.into() }
     }
 
     /// Convert the value to null (unit type).

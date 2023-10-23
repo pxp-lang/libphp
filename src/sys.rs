@@ -1,11 +1,21 @@
 use std::ffi::{c_char, c_void};
 
+// Type flags.
 pub const IS_NULL: u8 = 1;
 pub const IS_FALSE: u8 = 2;
 pub const IS_TRUE: u8 = 3;
 pub const IS_LONG: u8 = 4;
 pub const IS_DOUBLE: u8 = 5;
 pub const IS_STRING: u8 = 6;
+pub const IS_ARRAY: u8 = 7;
+
+// Hash table flags.
+pub const HASH_KEY_IS_STRING: i32 = 1;
+pub const HASH_KEY_IS_LONG: i32 = 2;
+pub const HASH_KEY_NON_EXISTENT: i32 = 3;
+
+// Misc. constants.
+pub const HT_MIN_SIZE: u32 = 8;
 
 #[link(name = "wrapper")]
 extern "C" {
